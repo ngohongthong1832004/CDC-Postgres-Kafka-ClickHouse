@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
@@ -6,6 +8,8 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "2181:2181"
+    networks:
+      - default
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
@@ -17,10 +21,27 @@ services:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - default
+
+  kafdrop:
+    image: obsidiandynamics/kafdrop
+    ports:
+      - "9001:9000"
+    environment:
+      KAFKA_BROKER_CONNECT: kafka:9092
+    depends_on:
+      - kafka
+    networks:
+      - default
 
   kafka-connect:
-    image: confluentinc/cp-kafka-connect:7.5.0
+    build:
+      context: ./kafka-connect
+      dockerfile: Dockerfile
     depends_on:
       - kafka
     ports:
@@ -28,23 +49,34 @@ services:
     environment:
       CONNECT_BOOTSTRAP_SERVERS: kafka:9092
       CONNECT_REST_PORT: 8083
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect  # Add this line
       CONNECT_GROUP_ID: "kafka-connect-group"
       CONNECT_CONFIG_STORAGE_TOPIC: connect-configs
       CONNECT_OFFSET_STORAGE_TOPIC: connect-offsets
       CONNECT_STATUS_STORAGE_TOPIC: connect-status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1  # Add this line
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1  # Add this line
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1  # Add this line
       CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
       CONNECT_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
       CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
       CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
       CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
       CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
-      CONNECT_PLUGIN_PATH: "/usr/share/java"
+      CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"  # Update this
     command:
       - bash
       - -c
       - |
+        echo "Waiting for Kafka to be ready..."
+        cub kafka-ready 1 30 -b kafka:9092 || exit 1
+        echo "Installing connector plugins..."
+        # Make directory for connector if it doesn't exist
+        mkdir -p /usr/share/confluent-hub-components
+        # Install Debezium PostgreSQL connector
         confluent-hub install --no-prompt debezium/debezium-connector-postgresql:2.4.1
-        && /etc/confluent/docker/run
+        echo "Starting Kafka Connect..."
+        /etc/confluent/docker/run
 
   postgres:
     image: postgres
@@ -56,8 +88,10 @@ services:
       POSTGRES_PORT: 5432
     ports:
       - "5432:5432"
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_replication_slots=10", "-c", "max_wal_senders=10"]
     volumes:
-      - ./database/postgres:/var/lib/postgresql/data  # 👈 CHỈNH LẠI tên thư mục cho đúng
+      - ./database/postgres:/var/lib/postgresql/data
+      - ./init/init_cdc.sql:/docker-entrypoint-initdb.d/init_cdc.sql
     networks:
       - default
 
@@ -71,8 +105,7 @@ services:
       - CLICKHOUSE_USER=clickhouse
       - CLICKHOUSE_PASSWORD=clickhouse
     volumes:
-      - ./database/clickhouse:/var/lib/clickhouse
-      - ./database/clickhouse/clickhouse_backup:/var/lib/clickhouse_backup
+      - clickhouse_data:/var/lib/clickhouse
     networks:
       - default
 
@@ -89,13 +122,14 @@ services:
       - default
 
   airflow:
-    image: apache/airflow:2.8.1
+    build:
+      context: ./airflow  
+      dockerfile: Dockerfile
     container_name: airflow
     environment:
-      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor  # Local test xài SQLite
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
       - AIRFLOW__CORE__FERNET_KEY=airflowfernetkey
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
-      - _PIP_ADDITIONAL_REQUIREMENTS=clickhouse-connect psycopg2-binary
     ports:
       - "8080:8080"
     volumes:
@@ -104,7 +138,7 @@ services:
       - ./airflow:/opt/airflow
     entrypoint: >
       bash -c "
-        rm -f /opt/airflow/airflow-webserver.pid &&  # 👈 THÊM DÒNG NÀY
+        rm -f /opt/airflow/airflow-webserver.pid &&
         airflow db migrate &&
         airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com || true &&
         airflow webserver --port 8080 &
@@ -116,13 +150,9 @@ services:
     networks:
       - default
 
-
-
+volumes:
+  clickhouse_data:
 
 networks:
   default:
     driver: bridge
-
-volumes:
-  db_data:
-  clickhouse_data:

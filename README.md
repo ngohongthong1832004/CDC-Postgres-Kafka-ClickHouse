@@ -1,5 +1,4 @@
 
-```markdown
 # 📊 Real-time & Batch Data Platform with FastAPI, PostgreSQL, ClickHouse, Kafka, and Airflow
 
 ## 🧩 Mục tiêu dự án
@@ -60,5 +59,10 @@ Dịch vụ sẽ được khởi chạy trên các cổng:
 * Debezium được cấu hình qua Kafka Connect, giúp tự động **lấy các thay đổi từ PostgreSQL** và đẩy qua Kafka.
 * Airflow sử dụng SQLite cho đơn giản, mô phỏng chạy batch pipeline.
 
-```
+## 🛠️ Một số lệnh cần chạy tay
+- CREATE USER debezium WITH PASSWORD 'debezium';
+- GRANT CONNECT ON DATABASE postgres TO debezium;
+- GRANT USAGE ON SCHEMA public TO debezium;
+- GRANT SELECT ON TABLE sentiment_social TO debezium;
+- ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO debezium;
       
