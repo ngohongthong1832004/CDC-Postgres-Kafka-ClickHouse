@@ -1,0 +1,76 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.so
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Python env
+.env
+.venv
+env/
+venv/
+ENV/
+Pipfile.lock
+
+# Logs
+*.log
+
+# Docker
+**/.DS_Store
+**/.dockerignore
+docker-compose.override.yml
+**/docker-entrypoint.sh
+**/Dockerfile
+
+# Airflow - các file runtime và DB sqlite
+airflow/airflow.db
+airflow/airflow-webserver.pid
+airflow/logs/
+airflow/__pycache__/
+
+# PostgreSQL & ClickHouse data volumes
+# Ignore everything inside database/postgres
+/database/postgres/*
+!database/postgres/pg_hba.conf
+!database/postgres/pg_ident.conf
+!database/postgres/postgresql.conf
+!database/postgres/postgresql.auto.conf
+!database/postgres/PG_VERSION
+
+# Các subfolder chứa dữ liệu runtime của PostgreSQL — nên ignore
+database/postgres/base/
+database/postgres/global/
+database/postgres/pg_*  # tất cả các thư mục bắt đầu pg_
+!database/postgres/pg_hba.conf
+!database/postgres/pg_ident.conf
+
+# Ignore WAL logs và dữ liệu
+database/postgres/pg_wal/
+database/postgres/pg_stat/
+database/postgres/pg_xact/
+
+
+# Kafka/Kafka Connect - nếu bạn mount volume sau này
+kafka-data/
+connect-plugins/
+
+# Các file tạm
+*.tmp
+*.bak
+*.old
+*.pid
+*.tar.gz
+*.zip
+
+# System files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+input_data.csv
+
+*.csv
